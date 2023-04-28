@@ -6,9 +6,10 @@ Contrastive learning project at CERN to be used for event reconstruction for the
 
 Run these two commands first:
 
-'ssh lxplus-gpu'
-'source /cvmfs/sft.cern.ch/lcg/views/LCG_103cuda/x86_64-centos9-gcc11-opt/setup.sh'
-
+```
+ssh lxplus-gpu
+source /cvmfs/sft.cern.ch/lcg/views/LCG_103cuda/x86_64-centos9-gcc11-opt/setup.sh
+```
 To run the training script:
 
 'python3 cc_v1_train_t0p1_nloss.py'
