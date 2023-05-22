@@ -36,20 +36,49 @@ class CCV1(Dataset):
 
     def __init__(self, root, transform=None, max_events=1e8):
         super(CCV1, self).__init__(root, transform)
-        
+        self.step_size = 500
         self.fill_data(max_events)
+        
 
     def fill_data(self,max_events):
         counter = 0
-        for fi,path in enumerate(self.raw_paths):
+        arrLens0 = []
+        arrLens1 = []
 
-            for array in uproot.iterate("%s:ticlNtuplizer/simtrackstersCP"%path, ["stsCP_vertices_x", "stsCP_vertices_y", "stsCP_vertices_z", "stsCP_vertices_energy", "stsCP_vertices_multiplicity"], step_size=500):
+        for fi,path in enumerate(self.raw_paths):
+            
+            crosscounter = 0
+            for array in uproot.iterate("%s:ticlNtuplizer/simtrackstersCP"%path, ["stsCP_vertices_x", "stsCP_vertices_y", "stsCP_vertices_z", 
+            "stsCP_vertices_energy", "stsCP_vertices_multiplicity", "stsCP_vertices_time", "stsCP_vertices_indexes"], step_size=self.step_size):
+           
+                
                 tmp_stsCP_vertices_x = array['stsCP_vertices_x']
                 tmp_stsCP_vertices_y = array['stsCP_vertices_y']
                 tmp_stsCP_vertices_z = array['stsCP_vertices_z']
                 tmp_stsCP_vertices_energy = array['stsCP_vertices_energy']
+                tmp_stsCP_vertices_time = array['stsCP_vertices_time']
+                tmp_stsCP_vertices_indexes = array['stsCP_vertices_indexes']
+
+
 
                 tmp_stsCP_vertices_multiplicity = array['stsCP_vertices_multiplicity']
+                
+
+                # Code block for reading from other tree
+                #tmp_all_vertices_radius = uproot.open(path)['ticlNtuplizer/clusters']['cluster_radius'].array(entry_start=crosscounter*self.step_size,\
+                #                                                                                        entry_stop=(crosscounter+1)*self.step_size)
+
+
+                #tmp_all_vertices_radius = uproot.open(path)['ticlNtuplizer/clusters']['cluster_radius'].array(entry_start=crosscounter*500,\
+                #                                                                                        entry_stop=(crosscounter+1)*500)
+                #print("L1: ", len(tmp_all_vertices_radius[0]))
+                #print("L2: ", len(tmp_stsCP_vertices_indexes[0]))
+                #print("L3: ", len(tmp_stsCP_vertices_indexes[0][0]))
+                #print("L4: ", len(tmp_stsCP_vertices_indexes[0][1]))
+                #print("L5: ", len(ak.flatten(tmp_stsCP_vertices_indexes[0])))
+                #print("LIST 1: ", (ak.flatten(tmp_stsCP_vertices_indexes[0]))[0:20])
+                
+                #tmp_stsCP_vertices_radius = tmp_all_vertices_radius[tmp_stsCP_vertices_indexes]
 
 
                 #Filtering all the points where energy percent < 50%
@@ -59,9 +88,12 @@ class CCV1(Dataset):
                 tmp_stsCP_vertices_y = tmp_stsCP_vertices_y[skim_mask_energyPercent]
                 tmp_stsCP_vertices_z = tmp_stsCP_vertices_z[skim_mask_energyPercent]
                 tmp_stsCP_vertices_energy = tmp_stsCP_vertices_energy[skim_mask_energyPercent]
+                tmp_stsCP_vertices_time = tmp_stsCP_vertices_time[skim_mask_energyPercent]
+
+                #tmp_stsCP_vertices_radius = tmp_stsCP_vertices_radius[skim_mask_energyPercent]
 
                 
-                
+                #SHOULD BE LEN(E) >= 2 for MULTI particles
                 skim_mask = []
                 for e in tmp_stsCP_vertices_x:
                     if len(e) >= 2:
@@ -72,27 +104,38 @@ class CCV1(Dataset):
                 tmp_stsCP_vertices_y = tmp_stsCP_vertices_y[skim_mask]
                 tmp_stsCP_vertices_z = tmp_stsCP_vertices_z[skim_mask]
                 tmp_stsCP_vertices_energy = tmp_stsCP_vertices_energy[skim_mask]
+                tmp_stsCP_vertices_time = tmp_stsCP_vertices_time[skim_mask]
+                #tmp_stsCP_vertices_radius = tmp_stsCP_vertices_radius[skim_mask]
                 
-                
+
 
                 if counter == 0:
                     self.stsCP_vertices_x = tmp_stsCP_vertices_x
                     self.stsCP_vertices_y = tmp_stsCP_vertices_y
                     self.stsCP_vertices_z = tmp_stsCP_vertices_z
                     self.stsCP_vertices_energy = tmp_stsCP_vertices_energy
+                    self.stsCP_vertices_time = tmp_stsCP_vertices_time
+
+                    #self.stsCP_vertices_radius = tmp_stsCP_vertices_radius
+
                 else:
                     self.stsCP_vertices_x = ak.concatenate((self.stsCP_vertices_x,tmp_stsCP_vertices_x))
                     self.stsCP_vertices_y = ak.concatenate((self.stsCP_vertices_y,tmp_stsCP_vertices_y))
                     self.stsCP_vertices_z = ak.concatenate((self.stsCP_vertices_z,tmp_stsCP_vertices_z))
                     self.stsCP_vertices_energy = ak.concatenate((self.stsCP_vertices_energy,tmp_stsCP_vertices_energy))
+                    self.stsCP_vertices_time = ak.concatenate((self.stsCP_vertices_time,tmp_stsCP_vertices_time))
+
+                    #self.stsCP_vertices_radius = ak.concatenate((self.stsCP_vertices_radius,tmp_stsCP_vertices_radius))
+
                 print(len(self.stsCP_vertices_x))
                 counter += 1
                 if len(self.stsCP_vertices_x) > max_events:
                     break
             if len(self.stsCP_vertices_x) > max_events:
                 break
-
-
+     
+            
+            
     def download(self):
         raise RuntimeError(
             'Dataset not found. Please download it from {} and move all '
@@ -121,7 +164,15 @@ class CCV1(Dataset):
         lc_z = self.stsCP_vertices_z[idx]
         flat_lc_z = np.expand_dims(np.array(ak.flatten(lc_z)),axis=1)
         lc_e = self.stsCP_vertices_energy[idx]
-        flat_lc_e = np.expand_dims(np.array(ak.flatten(lc_e)),axis=1)                                                                                   
+        flat_lc_e = np.expand_dims(np.array(ak.flatten(lc_e)),axis=1)     
+        lc_t = self.stsCP_vertices_time[idx]
+        flat_lc_t = np.expand_dims(np.array(ak.flatten(lc_t)),axis=1)  
+
+        #lc_rad = self.stsCP_vertices_radius[idx]
+        #flat_lc_rad = np.expand_dims(np.array(ak.flatten(lc_rad)),axis=1)  
+
+        #lc_id = self.stsCP_vertices_id[idx]
+        #flat_lc_id = np.expand_dims(np.array(ak.flatten(lc_id)),axis=1)                                                                                          
 
 
         flat_lc_feats = np.concatenate((flat_lc_x,flat_lc_y,flat_lc_z,flat_lc_e),axis=-1)
@@ -156,10 +207,10 @@ class CCV1(Dataset):
         x_pos_edge = torch.from_numpy(np.array(pos_edges))
         x_neg_edge = torch.from_numpy(np.array(neg_edges))       
 
-
+        x_counts = lc_x
         y = torch.from_numpy(np.array([0 for u in range(len(flat_lc_feats))])).float()
         return Data(x=x, edge_index=edge_index, y=y,
-                        x_lc=x_lc, x_pe=x_pos_edge, x_ne=x_neg_edge)
+                        x_lc=x_lc, x_pe=x_pos_edge, x_ne=x_neg_edge, x_counts = x_counts)
 
 
 
@@ -177,14 +228,14 @@ BATCHSIZE = 1
 #opath = '/eos/project/c/contrast/public/solar/models/20230220_multi_photons/' # therein, files should be in a subfolder raw/*root
 
 #FOR PIONS
-ipath = '/eos/project/c/contrast/public/solar/data/20230214_two_pions/train' # therein, files should be in a subfolder raw/*root
-vpath = '/eos/project/c/contrast/public/solar/data/20230214_two_pions/test' # therein, files should be in a subfolder raw/*root
-opath = '/eos/project/c/contrast/public/solar/models/20230214_two_pions/' # therein, files should be in a subfolder raw/*root
+#ipath = '/eos/project/c/contrast/public/solar/data/20230214_two_pions/train' # therein, files should be in a subfolder raw/*root
+#vpath = '/eos/project/c/contrast/public/solar/data/20230214_two_pions/test' # therein, files should be in a subfolder raw/*root
+#opath = '/eos/project/c/contrast/public/solar/models/20230214_two_pions/' # therein, files should be in a subfolder raw/*root
 
 #FOR MULTI-PHOTONS
-#ipath = '/eos/project/c/contrast/public/solar/data/20230419_multi_photons/train' # therein, files should be in a subfolder raw/*root
-#vpath = '/eos/project/c/contrast/public/solar/data/20230419_multi_photons/test' # therein, files should be in a subfolder raw/*root
-#opath = '/eos/project/c/contrast/public/solar/models/20230419_multi_photons/' # therein, files should be in a subfolder raw/*root
+ipath = '/eos/project/c/contrast/public/solar/data/20230419_multi_photons/train' # therein, files should be in a subfolder raw/*root
+vpath = '/eos/project/c/contrast/public/solar/data/20230419_multi_photons/test' # therein, files should be in a subfolder raw/*root
+opath = '/eos/project/c/contrast/public/solar/models/20230419_multi_photons/' # therein, files should be in a subfolder raw/*root
 
 
 print('Loading train dataset at', ipath)
@@ -258,7 +309,15 @@ class Net(nn.Module):
             nn.ELU(),
             nn.Linear(32, 16),
             nn.ELU(),
-            nn.Linear(16, 8)
+            nn.Linear(16, 8),
+            #new Layers for test
+
+            #nn.Linear(32, 32),
+            #nn.ELU(),
+            #nn.Linear(32, 16)
+            
+
+
 #            nn.ELU(),
 #            nn.Linear(16, 8)
         )
@@ -288,11 +347,11 @@ print(device)
 
 cc = Net().to(device)
 
-#cc.load_state_dict(torch.load(opath+"epoch-32.pt")['model'])
+cc.load_state_dict(torch.load(opath+"epoch-1.pt")['model'])
 optimizer = torch.optim.Adam(cc.parameters(), lr=0.001)
-#optimizer.load_state_dict(torch.load(opath+"epoch-32.pt")['opt'])
+optimizer.load_state_dict(torch.load(opath+"epoch-1.pt")['opt'])
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.5)
-#scheduler.load_state_dict(torch.load(opath+"epoch-32.pt")['lr'])
+scheduler.load_state_dict(torch.load(opath+"epoch-1.pt")['lr'])
 
 
 def train():
@@ -361,7 +420,7 @@ all_val_loss = []
 
 loss_dict = {'train_loss': [], 'val_loss': []}
 
-for epoch in range(1, 2):
+for epoch in range(2, 10):
     print(f'Training Epoch {epoch} on {len(train_loader.dataset)} jets')
     loss = train()
     scheduler.step()
