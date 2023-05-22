@@ -26,15 +26,18 @@ import argparse
 #singularity shell --bind /eos/project/c/contrast/public/solar/  /afs/cern.ch/user/p/pkakhand/geometricdl.sif
 
 
-##PION COMMAND
+##PION COMMAND(s)
 #python3 cc_v1_infer_t0p1_nloss.py --ipath /eos/project/c/contrast/public/solar/data/20230214_two_pions/val --mpath /eos/project/c/contrast/public/solar/models/20230214_two_pions/ --opath /eos/project/c/contrast/public/solar/output/20230214_two_pions/
 
+#python3 cc_v1_infer_t0p1_nloss.py --ipath /eos/project/c/contrast/public/solar/data/20230214_two_pions/trackster_val_testData --mpath /eos/project/c/contrast/public/solar/models/20230214_two_pions/ --opath /eos/project/c/contrast/public/solar/output/20230214_two_pions/
 
 #PHOTON COMMAND
 #python3 cc_v1_infer_t0p1_nloss.py --ipath /eos/project/c/contrast/public/solar/data/20230220_multi_photons/val --mpath /eos/project/c/contrast/public/solar/models/20230220_multi_photons/ --opath /eos/project/c/contrast/public/solar/output/20230220_multi_photons/
 
-#MULTI PHOTON COMMAND
+#MULTI PHOTON COMMAND(s)
 #python3 cc_v1_infer_t0p1_nloss.py --ipath /eos/project/c/contrast/public/solar/data/20230419_multi_photons/val --mpath /eos/project/c/contrast/public/solar/models/20230419_multi_photons/ --opath /eos/project/c/contrast/public/solar/output/20230419_multi_photons/
+
+#python3 cc_v1_infer_t0p1_nloss.py --ipath /eos/project/c/contrast/public/solar/data/20230419_multi_photons/trackster_val_testData --mpath /eos/project/c/contrast/public/solar/models/20230419_multi_photons/ --opath /eos/project/c/contrast/public/solar/output/20230419_multi_photons/
 
 
 #externally define this class
@@ -54,17 +57,22 @@ class CCV1(Dataset):
     def fill_data(self,max_events):
         counter = 0
         for fi,path in enumerate(self.raw_paths):
+            
 
+            for array in uproot.iterate("%s:ticlNtuplizer/simtrackstersCP"%path, ["stsCP_vertices_x", "stsCP_vertices_y", "stsCP_vertices_z", 
+                                        "stsCP_vertices_energy", "stsCP_vertices_multiplicity", "stsCP_vertices_time"], step_size=500):
+           
 
-            for array in uproot.iterate("%s:ticlNtuplizer/simtrackstersCP"%path, ["stsCP_vertices_x", "stsCP_vertices_y", "stsCP_vertices_z", "stsCP_vertices_energy", "stsCP_vertices_multiplicity"], step_size=500):
                 tmp_stsCP_vertices_x = array['stsCP_vertices_x']
                 tmp_stsCP_vertices_y = array['stsCP_vertices_y']
                 tmp_stsCP_vertices_z = array['stsCP_vertices_z']
                 tmp_stsCP_vertices_energy = array['stsCP_vertices_energy']
+                tmp_stsCP_vertices_time = array['stsCP_vertices_time']
+
 
                 tmp_stsCP_vertices_multiplicity = array['stsCP_vertices_multiplicity']
-                
-                
+
+
                 #Filtering all the points where energy percent < 50%
                 energyPercent = 1/tmp_stsCP_vertices_multiplicity
                 skim_mask_energyPercent = energyPercent > 0.5
@@ -72,8 +80,10 @@ class CCV1(Dataset):
                 tmp_stsCP_vertices_y = tmp_stsCP_vertices_y[skim_mask_energyPercent]
                 tmp_stsCP_vertices_z = tmp_stsCP_vertices_z[skim_mask_energyPercent]
                 tmp_stsCP_vertices_energy = tmp_stsCP_vertices_energy[skim_mask_energyPercent]
+                tmp_stsCP_vertices_time = tmp_stsCP_vertices_time[skim_mask_energyPercent]
+
                 
-                #Change to '==2' to only get the two photon data
+                
                 skim_mask = []
                 for e in tmp_stsCP_vertices_x:
                     if len(e) >= 2:
@@ -84,17 +94,25 @@ class CCV1(Dataset):
                 tmp_stsCP_vertices_y = tmp_stsCP_vertices_y[skim_mask]
                 tmp_stsCP_vertices_z = tmp_stsCP_vertices_z[skim_mask]
                 tmp_stsCP_vertices_energy = tmp_stsCP_vertices_energy[skim_mask]
+                tmp_stsCP_vertices_time = tmp_stsCP_vertices_time[skim_mask]
+
+                
+                
 
                 if counter == 0:
                     self.stsCP_vertices_x = tmp_stsCP_vertices_x
                     self.stsCP_vertices_y = tmp_stsCP_vertices_y
                     self.stsCP_vertices_z = tmp_stsCP_vertices_z
                     self.stsCP_vertices_energy = tmp_stsCP_vertices_energy
+                    self.stsCP_vertices_time = tmp_stsCP_vertices_time
+
                 else:
                     self.stsCP_vertices_x = ak.concatenate((self.stsCP_vertices_x,tmp_stsCP_vertices_x))
                     self.stsCP_vertices_y = ak.concatenate((self.stsCP_vertices_y,tmp_stsCP_vertices_y))
                     self.stsCP_vertices_z = ak.concatenate((self.stsCP_vertices_z,tmp_stsCP_vertices_z))
                     self.stsCP_vertices_energy = ak.concatenate((self.stsCP_vertices_energy,tmp_stsCP_vertices_energy))
+                    self.stsCP_vertices_time = ak.concatenate((self.stsCP_vertices_time,tmp_stsCP_vertices_time))
+
                 print(len(self.stsCP_vertices_x))
                 counter += 1
                 if len(self.stsCP_vertices_x) > max_events:
@@ -102,6 +120,7 @@ class CCV1(Dataset):
             if len(self.stsCP_vertices_x) > max_events:
                 break
 
+            
 
     def download(self):
         raise RuntimeError(
@@ -131,9 +150,13 @@ class CCV1(Dataset):
         lc_z = self.stsCP_vertices_z[idx]
         flat_lc_z = np.expand_dims(np.array(ak.flatten(lc_z)),axis=1)
         lc_e = self.stsCP_vertices_energy[idx]
-        flat_lc_e = np.expand_dims(np.array(ak.flatten(lc_e)),axis=1)                                                                                   
-        #print("Number of LCs", len(flat_lc_x))
-        #print(flat_lc_x.shape)
+        flat_lc_e = np.expand_dims(np.array(ak.flatten(lc_e)),axis=1)      
+        lc_t = self.stsCP_vertices_time[idx]
+        flat_lc_t = np.expand_dims(np.array(ak.flatten(lc_t)),axis=1)  
+
+        #lc_id = self.stsCP_vertices_id[idx]
+        #flat_lc_id = np.expand_dims(np.array(ak.flatten(lc_id)),axis=1)                                                                                          
+
 
         flat_lc_feats = np.concatenate((flat_lc_x,flat_lc_y,flat_lc_z,flat_lc_e),axis=-1)
 
@@ -166,17 +189,11 @@ class CCV1(Dataset):
         x_lc = x
         x_pos_edge = torch.from_numpy(np.array(pos_edges))
         x_neg_edge = torch.from_numpy(np.array(neg_edges))       
-        
-        #define x_counts = torch.([indices1, indices2])
-        #print(np.array(lc_x[0]).shape)
-        #print(np.array(lc_x).shape)
-        #Send Lcx array
+
         x_counts = lc_x
-        #just separated 
         y = torch.from_numpy(np.array([0 for u in range(len(flat_lc_feats))])).float()
         return Data(x=x, edge_index=edge_index, y=y,
                         x_lc=x_lc, x_pe=x_pos_edge, x_ne=x_neg_edge, x_counts = x_counts)
-
 
 
 BATCHSIZE = 1
@@ -399,9 +416,19 @@ def test():
             soft_labels.append(tmp_soft_label)
             soft_scores.append(tmp_soft_score)
             
-            gt_index.append(len(counts[0][0]))
+            num_particles = len(counts[0])
 
-            #print(tmp_lc_x)
+            temp_index = []
+            for k in range(num_particles):
+                temp_index.append(len(counts[0][k]))
+
+            #Old code for just two particles
+            #gt_index.append(len(counts[0][0]))
+
+            #new line for multi-photons
+            gt_index.append(temp_index)
+
+
             
 
 
